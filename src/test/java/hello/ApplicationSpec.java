@@ -15,7 +15,7 @@ public class ApplicationSpec {
 
     @Test
     public void testHelloWorldResponse(){
-        assertEquals("hello, world", application.index());
+        assertEquals("hello, jconfdev", application.index());
     }
 
 }
