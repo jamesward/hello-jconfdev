@@ -3,6 +3,8 @@ kind: Task
 metadata:
   name: test
 spec:
+  workspaces:
+    - name: source
   steps:
     - name: test
       image: adoptopenjdk/openjdk8

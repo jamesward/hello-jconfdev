@@ -1,34 +1,49 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: tekton-triggers-role
+  name: tekton-triggers-admin
 rules:
-  - apiGroups: ["tekton.dev"]
-    resources: ["eventlisteners", "triggerbindings", "triggertemplates", "tasks", "taskruns"]
-    verbs: ["get"]
-  - apiGroups: [""]
-    resources: ["configmaps", "secrets"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["tekton.dev"]
-    resources: ["pipelineruns", "pipelineresources", "taskruns"]
-    verbs: ["create"]
+  - apiGroups:
+      - triggers.tekton.dev
+    resources:
+      - eventlisteners
+      - triggerbindings
+      - triggertemplates
+    verbs:
+      - get
+  - apiGroups:
+      - tekton.dev
+    resources:
+      - pipelineruns
+      - pipelineresources
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: tekton-triggers-serviceaccount
+  name: tekton-triggers-admin
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: tekton-triggers-rolebinding
+  name: tekton-triggers-admin-binding
 subjects:
   - kind: ServiceAccount
-    name: tekton-triggers-serviceaccount
+    name: tekton-triggers-admin
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: tekton-triggers-role
+  name: tekton-triggers-admin
 ---
 apiVersion: v1
 kind: Secret
@@ -37,7 +52,7 @@ metadata:
 stringData:
   secret: foobar
 ---
-apiVersion: tekton.dev/v1alpha1
+apiVersion: triggers.tekton.dev/v1alpha1
 kind: TriggerBinding
 metadata:
   name: pipeline-binding
@@ -50,7 +65,7 @@ spec:
     - name: reponame
       value: $(body.repository.name)
 ---
-apiVersion: tekton.dev/v1alpha1
+apiVersion: triggers.tekton.dev/v1alpha1
 kind: TriggerTemplate
 metadata:
   name: pipeline-template
@@ -64,44 +79,46 @@ spec:
     - name: reponame
       description: The git repo name
   resourcetemplates:
-    - apiVersion: tekton.dev/v1alpha1
+    - apiVersion: tekton.dev/v1beta1
       kind: PipelineRun
       metadata:
-        name: test-build-deploy-pipeline-run-$(uid)
+        name: build-deploy-pipeline-run-$(uid)
       spec:
         pipelineRef:
-          name: test-build-deploy-pipeline
+          name: build-deploy-pipeline
         serviceAccountName: kn-deployer-account
-        podTemplate:
-          volumes:
-            - name: my-cache
-              persistentVolumeClaim:
-                claimName: my-volume-claim
         resources:
-          - name: source
-            resourceSpec:
-              type: git
-              params:
-                - name: revision
-                  value: $(params.gitrevision)
-                - name: url
-                  value: $(params.gitrepourl)
           - name: image
             resourceSpec:
               type: image
               params:
                 - name: url
-                  value: gcr.io/jw-demo/$(params.reponame)
+                  value: gcr.io/jw-demo/$(tt.params.reponame)
         params:
           - name: service-name
-            value: $(params.reponame)
+            value: $(tt.params.reponame)
+          - name: git-url
+            value: $(tt.params.gitrepourl)
+          - name: git-branch
+            value: $(tt.params.gitrevision)
+          - name: image-url
+            value: gcr.io/jw-demo/$(tt.params.reponame)
+        workspaces:
+          - name: source
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
 ---
-apiVersion: tekton.dev/v1alpha1
+apiVersion: triggers.tekton.dev/v1alpha1
 kind: EventListener
 metadata:
   name: github-listener
 spec:
-  serviceAccountName: tekton-triggers-serviceaccount
+  serviceAccountName: tekton-triggers-admin
   triggers:
     - name: trigger
       interceptors:
@@ -112,7 +129,7 @@ spec:
             eventTypes:
               - push
       bindings:
-        - name: pipeline-binding
+        - ref: pipeline-binding
       template:
         name: pipeline-template
 ---

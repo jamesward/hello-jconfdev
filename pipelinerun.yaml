@@ -19,7 +19,7 @@ spec:
     - name: git-url
       value: https://github.com/jamesward/hello-jconfdev.git
     - name: git-branch
-      value: jib
+      value: master
     - name: image-url
       value: gcr.io/jw-demo/hello-jconfdev
   workspaces:
