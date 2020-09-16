@@ -1,0 +1,79 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: test
+spec:
+  steps:
+    - name: test
+      image: adoptopenjdk/openjdk8
+      workingDir: /workspace/source
+      command: ["./mvnw"]
+      args: ["--no-transfer-progress", "test"]
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: build-deploy-pipeline
+spec:
+  workspaces:
+    - name: source
+  resources:
+    - name: image
+      type: image
+  params:
+    - name: service-name
+      type: string
+    - name: git-url
+      type: string
+    - name: git-branch
+      type: string
+    - name: image-url
+      type: string
+  tasks:
+    - name: git-clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-branch)
+      workspaces:
+        - name: output
+          workspace: source
+
+    - name: test
+      taskRef:
+        name: test
+      runAfter:
+        - git-clone
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: source-to-image
+      taskRef:
+        name: jib-maven
+      runAfter:
+        - test
+      resources:
+        outputs:
+          - name: image
+            resource: image
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: deploy
+      taskRef:
+        name: kn
+      runAfter:
+        - source-to-image
+      params:
+        - name: ARGS
+          value:
+            - "service"
+            - "create"
+            - "$(params.service-name)"
+            - "--force"
+            - "--image=$(params.image-url)"

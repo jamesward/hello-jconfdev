@@ -1,0 +1,33 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: build-deploy-pipeline-run
+spec:
+  serviceAccountName: kn-deployer-account
+  pipelineRef:
+    name: build-deploy-pipeline
+  resources:
+    - name: image
+      resourceSpec:
+        type: image
+        params:
+          - name: url
+            value: gcr.io/jw-demo/hello-jconfdev
+  params:
+    - name: service-name
+      value: hello-jconfdev
+    - name: git-url
+      value: https://github.com/jamesward/hello-jconfdev.git
+    - name: git-branch
+      value: jib
+    - name: image-url
+      value: gcr.io/jw-demo/hello-jconfdev
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
